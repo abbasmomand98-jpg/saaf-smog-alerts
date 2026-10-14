@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saaf — Smog Alerts &amp; Clean-Air Planner</title>
+<meta name="description" content="Saaf is a UX concept: hyperlocal smog alerts for Pakistani cities, AQI forecasts, a should-you-go-outside planner, mask and indoor-air guidance.">
+<style>
+  :root{
+    --amber:#D97706; --amber-dark:#B45309; --amber-soft:#FEF3E2;
+    --ink:#1F2937; --muted:#6B7280; --line:#EDE9E3; --bg:#FFFDF9; --card:#FFFFFF;
+    --good:#16A34A; --moderate:#CAA30B; --usg:#EA580C; --unhealthy:#DC2626;
+    --vunhealthy:#7C3AED; --hazardous:#7F1D1D;
+    --radius:18px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.6; -webkit-font-smoothing:antialiased}
+  .wrap{max-width:640px; margin:0 auto; padding:0 18px 48px}
+
+  /* Header */
+  header.top{position:sticky; top:0; z-index:20; background:rgba(255,253,249,.94);
+    backdrop-filter:blur(10px); border-bottom:1px solid var(--line)}
+  .top-inner{max-width:640px; margin:0 auto; padding:12px 18px; display:flex; align-items:center; gap:12px}
+  .brand{display:flex; align-items:center; gap:10px; font-weight:800; font-size:1.35rem; letter-spacing:-.02em}
+  .brand .drop{width:34px; height:34px; border-radius:12px; background:linear-gradient(135deg,var(--amber),var(--amber-dark));
+    display:grid; place-items:center; color:#fff; font-size:1.1rem}
+  .citysel{margin-left:auto; display:flex; align-items:center; gap:8px; font-size:.85rem; color:var(--muted)}
+  select{font:inherit; padding:8px 12px; border-radius:12px; border:1.5px solid var(--line); background:#fff;
+    color:var(--ink); font-weight:600; cursor:pointer}
+  select:focus{outline:2px solid var(--amber); outline-offset:1px}
+
+  .kicker{display:inline-block; margin:26px 0 10px; font-size:.78rem; font-weight:700; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--amber-dark); background:var(--amber-soft);
+    padding:6px 14px; border-radius:999px}
+  h1{font-size:2rem; line-height:1.2; letter-spacing:-.02em; margin-bottom:8px}
+  .lede{color:var(--muted); font-size:1.02rem; max-width:34em; margin-bottom:20px}
+
+  /* AQI hero card */
+  .aqi-card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    padding:26px 22px; margin-bottom:22px; box-shadow:0 10px 30px rgba(217,119,6,.08)}
+  .aqi-top{display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap}
+  .aqi-num{font-size:3.4rem; font-weight:800; letter-spacing:-.04em; line-height:1}
+  .aqi-city{font-size:.9rem; color:var(--muted); margin-top:4px}
+  .band{display:inline-flex; align-items:center; gap:8px; font-weight:700; font-size:.95rem;
+    padding:8px 16px; border-radius:999px; color:#fff; margin-top:10px}
+  .band i{width:10px; height:10px; border-radius:50%; background:#fff; opacity:.85}
+  .meta-row{display:flex; gap:18px; margin-top:16px; font-size:.88rem; color:var(--muted); flex-wrap:wrap}
+  .meta-row b{color:var(--ink)}
+  .updated{font-size:.78rem; color:var(--muted); margin-top:12px; display:flex; align-items:center; gap:6px}
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--good); animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .gauge-wrap{margin-top:18px}
+  .gauge-cap{display:flex; justify-content:space-between; font-size:.72rem; color:var(--muted); margin-top:4px}
+
+  /* Sections */
+  section.block{margin:34px 0}
+  h2{font-size:1.35rem; letter-spacing:-.015em; margin-bottom:6px}
+  .sub{color:var(--muted); font-size:.94rem; margin-bottom:16px}
+
+  /* Recommender */
+  .rec-card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:22px}
+  .chip-row{display:flex; flex-wrap:wrap; gap:10px; margin:10px 0 18px}
+  .chip{border:1.5px solid var(--line); background:#fff; border-radius:999px; padding:9px 16px;
+    font:inherit; font-size:.9rem; font-weight:600; cursor:pointer; transition:all .15s; color:var(--ink)}
+  .chip[aria-pressed="true"]{background:var(--ink); border-color:var(--ink); color:#fff}
+  .field-label{font-size:.82rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-top:6px}
+  .verdict{border-radius:var(--radius); padding:20px; margin-top:8px; display:none}
+  .verdict.show{display:block}
+  .verdict.go{background:#ECFDF5; border:1.5px solid #A7F3D0}
+  .verdict.caution{background:#FFFBEB; border:1.5px solid #FDE68A}
+  .verdict.stay{background:#FEF2F2; border:1.5px solid #FECACA}
+  .verdict h3{font-size:1.15rem; margin-bottom:6px}
+  .verdict p{font-size:.93rem; color:#374151}
+
+  /* Alerts */
+  .alert{background:var(--card); border:1px solid var(--line); border-left:5px solid var(--amber);
+    border-radius:14px; padding:15px 17px; margin-bottom:12px}
+  .alert.sev-high{border-left-color:var(--unhealthy)}
+  .alert.sev-info{border-left-color:var(--amber)}
+  .alert.sev-low{border-left-color:var(--moderate)}
+  .alert-head{display:flex; align-items:center; gap:10px; margin-bottom:6px}
+  .sev{font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
+    padding:4px 10px; border-radius:999px; color:#fff; background:var(--amber)}
+  .sev-high .sev{background:var(--unhealthy)}
+  .sev-low .sev{background:var(--moderate)}
+  .alert time{font-size:.78rem; color:var(--muted); margin-left:auto}
+  .alert p{font-size:.93rem}
+
+  /* Forecast */
+  .forecast{display:flex; gap:10px; align-items:flex-end; height:190px; padding:18px 16px 10px;
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius)}
+  .fday{flex:1; display:flex; flex-direction:column; align-items:center; gap:8px}
+  .fbar{width:100%; max-width:52px; border-radius:10px 10px 6px 6px; min-height:12px; transition:height .3s}
+  .fday .fv{font-size:.78rem; font-weight:800}
+  .fday .fd{font-size:.74rem; color:var(--muted)}
+
+  /* Masks */
+  .mask-grid{display:grid; gap:12px}
+  @media(min-width:520px){.mask-grid{grid-template-columns:1fr 1fr}}
+  .mask{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:18px}
+  .mask h3{font-size:1.05rem; margin-bottom:4px}
+  .eff{height:8px; background:#F3F4F6; border-radius:99px; margin:10px 0 6px; overflow:hidden}
+  .eff span{display:block; height:100%; border-radius:99px; background:var(--amber)}
+  .mask .pct{font-weight:800; font-size:.9rem}
+  .mask .price{font-size:.88rem; color:var(--muted); margin-top:6px}
+  .mask .buy{font-size:.84rem; color:var(--amber-dark); font-weight:600; margin-top:4px}
+  .picker{background:var(--amber-soft); border:1px solid #F5D9A8; border-radius:var(--radius);
+    padding:18px; margin-top:16px}
+  .picker p{font-size:.95rem}
+  .picker b{color:var(--amber-dark)}
+
+  /* Indoor */
+  .indoor{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:22px}
+  .purifier{display:flex; justify-content:space-between; align-items:center; gap:12px;
+    padding:12px 0; border-bottom:1px dashed var(--line); font-size:.94rem}
+  .purifier:last-of-type{border-bottom:none}
+  .purifier .p-price{font-weight:800; white-space:nowrap}
+  .tips{list-style:none; margin-top:14px}
+  .tips li{padding:9px 0 9px 30px; position:relative; font-size:.94rem; border-bottom:1px solid #F5F1EA}
+  .tips li:last-child{border-bottom:none}
+  .tips li::before{content:"✓"; position:absolute; left:4px; top:9px; color:var(--amber-dark); font-weight:800}
+
+  footer{margin-top:44px; padding-top:22px; border-top:1px solid var(--line); font-size:.82rem; color:var(--muted)}
+  .madeby{margin-top:10px; font-weight:700; color:var(--ink)}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand"><span class="drop">☁</span> Saaf</div>
+    <label class="citysel">City
+      <select id="citySelect" aria-label="Choose your city"></select>
+    </label>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <span class="kicker">Smog season · Oct – Jan</span>
+  <h1>Know the air before you step outside.</h1>
+  <p class="lede">Saaf watches smog levels across Pakistani cities and tells you, in plain words, when it's safe to go out, which mask actually helps, and how to keep your home's air clean.</p>
+
+  <!-- AQI hero -->
+  <div class="aqi-card" id="aqiCard">
+    <div class="aqi-top">
+      <div>
+        <div class="aqi-num" id="aqiNum">–</div>
+        <div class="aqi-city" id="aqiCity">AQI · select a city</div>
+        <div class="band" id="aqiBand"><i></i><span>–</span></div>
+      </div>
+      <svg width="120" height="72" viewBox="0 0 120 72" role="img" aria-label="AQI gauge">
+        <path d="M 10 66 A 52 52 0 0 1 110 66" fill="none" stroke="#F1EFEA" stroke-width="12" stroke-linecap="round"/>
+        <path id="gaugeArc" d="M 10 66 A 52 52 0 0 1 110 66" fill="none" stroke="#D97706" stroke-width="12"
+              stroke-linecap="round" stroke-dasharray="163.3" stroke-dashoffset="163.3"/>
+      </svg>
+    </div>
+    <div class="gauge-wrap"></div>
+    <div class="gauge-cap"><span>0 · Good</span><span>150</span><span>300+ · Hazardous</span></div>
+    <div class="meta-row">
+      <span>Main pollutant: <b id="pollutant">PM2.5</b></span>
+      <span>PM2.5: <b id="pm25">–</b></span>
+      <span>Hotspot: <b id="hotspot">–</b></span>
+    </div>
+    <div class="updated"><span class="dot"></span> Updated <span id="updatedAt">–</span> · simulated data</div>
+  </div>
+
+  <!-- Recommender -->
+  <section class="block" id="planner">
+    <h2>Should you go outside?</h2>
+    <p class="sub">Tell Saaf who's heading out and for what — it does the thinking.</p>
+    <div class="rec-card">
+      <div class="field-label">Who's going out?</div>
+      <div class="chip-row" id="profiles">
+        <button class="chip" data-p="child" aria-pressed="false">Child under 12</button>
+        <button class="chip" data-p="elderly" aria-pressed="false">Elderly (60+)</button>
+        <button class="chip" data-p="asthma" aria-pressed="false">Asthma / breathing issue</button>
+        <button class="chip" data-p="adult" aria-pressed="true">Healthy adult</button>
+      </div>
+      <div class="field-label">For what?</div>
+      <div class="chip-row" id="activities">
+        <button class="chip" data-a="school" data-strenuous="0" aria-pressed="true">School run</button>
+        <button class="chip" data-a="walk" data-strenuous="0" aria-pressed="false">Morning walk</button>
+        <button class="chip" data-a="work" data-strenuous="1" aria-pressed="false">Outdoor work</button>
+        <button class="chip" data-a="sports" data-strenuous="1" aria-pressed="false">Sports / exercise</button>
+      </div>
+      <div class="verdict" id="verdict" role="status" aria-live="polite">
+        <h3 id="verdictTitle"></h3>
+        <p id="verdictText"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Alerts -->
+  <section class="block">
+    <h2>Smog alerts</h2>
+    <p class="sub">Official advisories and hotspot warnings for your city.</p>
+    <div id="alerts"></div>
+  </section>
+
+  <!-- Forecast -->
+  <section class="block">
+    <h2>5-day smog forecast</h2>
+    <p class="sub">Wind and stubble-burning patterns shift fast — plan the week ahead.</p>
+    <div class="forecast" id="forecast" role="img" aria-label="Five day AQI forecast"></div>
+  </section>
+
+  <!-- Masks -->
+  <section class="block">
+    <h2>Which mask actually works?</h2>
+    <p class="sub">Not every mask stops smog. Here's the honest breakdown.</p>
+    <div class="mask-grid" id="masks"></div>
+    <div class="picker">
+      <p>For today's AQI in <b id="pickerCity">–</b>: <b id="pickerMask">–</b></p>
+    </div>
+  </section>
+
+  <!-- Indoor -->
+  <section class="block">
+    <h2>Keep indoor air clean</h2>
+    <p class="sub">When the air outside is bad, your home shouldn't be.</p>
+    <div class="indoor">
+      <div id="purifiers"></div>
+      <ul class="tips" id="tips"></ul>
+    </div>
+  </section>
+
+  <footer>
+    <p><strong>Concept demo.</strong> AQI figures, alerts and forecasts on this page are simulated for design purposes — not live data. In a real product, Saaf would pull readings from EPA stations and low-cost sensors across each city.</p>
+    <p class="madeby">Saaf — a UI/UX concept by Abbas Momand · abbasmomand98@gmail.com</p>
+  </footer>
+</div>
+
+<script>
+/* ============ Saaf data ============ */
+var CITIES = {
+  lahore:      { name:"Lahore",      aqi:292, pm25:212, hotspot:"DHA Phase 5 — AQI 340",
+                 forecast:[292, 305, 288, 264, 276],
+                 alerts:[
+                   {sev:"high", tag:"Schools", text:"Lahore: all public and private schools shift to online classes Thursday–Friday as smog peaks.", time:"2h ago"},
+                   {sev:"high", tag:"Hotspot", text:"DHA Phase 5, Johar Town and Thokar Niaz Beg are the worst right now — AQI above 330. Avoid outdoor errands there.", time:"4h ago"},
+                   {sev:"info", tag:"Punjab EPA", text:"Punjab EPA advises wearing masks outdoors and keeping windows shut until Sunday's expected wind change.", time:"7h ago"}]},
+  gujranwala:  { name:"Gujranwala",  aqi:318, pm25:248, hotspot:"GT Road industrial zone — AQI 355",
+                 forecast:[318, 296, 310, 289, 301],
+                 alerts:[
+                   {sev:"high", tag:"Hazardous", text:"Gujranwala is in the Hazardous band. Everyone — even healthy adults — should stay indoors as much as possible today.", time:"1h ago"},
+                   {sev:"info", tag:"Punjab EPA", text:"Brick kilns around GT Road ordered to suspend operations until air clears.", time:"5h ago"}]},
+  faisalabad:  { name:"Faisalabad",  aqi:246, pm25:176, hotspot:"Susan Road — AQI 268",
+                 forecast:[246, 258, 231, 219, 240],
+                 alerts:[
+                   {sev:"high", tag:"Health", text:"Hospitals in Faisalabad report a rise in breathing complaints. Asthma patients: keep inhalers on you.", time:"3h ago"},
+                   {sev:"low",  tag:"Traffic", text:"Motorway M-4 visibility reduced near Pindi Bhattian interchange — drive with fog lights on.", time:"6h ago"}]},
+  multan:      { name:"Multan",      aqi:187, pm25:128, hotspot:"Bosan Road — AQI 204",
+                 forecast:[187, 176, 195, 208, 182],
+                 alerts:[
+                   {sev:"info", tag:"Advisory", text:"Multan in the Unhealthy band. Morning walkers: shift exercise indoors or wait until after 11 AM when the haze lifts slightly.", time:"4h ago"}]},
+  rawalpindi:  { name:"Rawalpindi",  aqi:152, pm25:98,  hotspot:"Saddar — AQI 169",
+                 forecast:[152, 141, 158, 149, 136],
+                 alerts:[
+                   {sev:"info", tag:"Advisory", text:"Rawalpindi borders the Unhealthy band. Sensitive groups should cut back on long outdoor stays.", time:"5h ago"}]},
+  karachi:     { name:"Karachi",     aqi:138, pm25:84,  hotspot:"Korangi — AQI 157",
+                 forecast:[138, 129, 144, 151, 133],
+                 alerts:[
+                   {sev:"info", tag:"Port haze", text:"Sea-breeze is keeping Karachi's smog from settling, but Korangi and Landhi are still Unhealthy for Sensitive groups.", time:"3h ago"}]},
+  peshawar:    { name:"Peshawar",    aqi:128, pm25:76,  hotspot:"University Road — AQI 141",
+                 forecast:[128, 135, 121, 118, 130],
+                 alerts:[
+                   {sev:"info", tag:"Advisory", text:"Peshawar mornings are hazy until about 10 AM. School buses are running with a 30-minute delay window.", time:"6h ago"}]},
+  islamabad:   { name:"Islamabad",   aqi:112, pm25:64,  hotspot:"I-8 Markaz — AQI 124",
+                 forecast:[112, 104, 118, 125, 109],
+                 alerts:[
+                   {sev:"low",  tag:"Outlook", text:"Islamabad is the cleanest of the big cities today, but Margalla-side traffic corridors still spike at rush hour.", time:"8h ago"}]}
+};
+/* ============ Core logic (pure, testable) ============ */
+function aqiBand(aqi){
+  if (aqi <= 50)  return { idx:0, label:"Good",                    color:"#16A34A" };
+  if (aqi <= 100) return { idx:1, label:"Moderate",                color:"#CAA30B" };
+  if (aqi <= 150) return { idx:2, label:"Unhealthy for Sensitive", color:"#EA580C" };
+  if (aqi <= 200) return { idx:3, label:"Unhealthy",               color:"#DC2626" };
+  if (aqi <= 300) return { idx:4, label:"Very Unhealthy",          color:"#7C3AED" };
+  return { idx:5, label:"Hazardous", color:"#7F1D1D" };
+}
+
+/* profiles: array of "child" | "elderly" | "asthma" | "adult"
+   activity: "school" | "walk" | "work" | "sports" ; strenuous: 0 | 1 */
+function recommend(aqi, profiles, activity, strenuous){
+  var band = aqiBand(aqi);
+  var sensitive = profiles.some(function(p){ return p==="child" || p==="elderly" || p==="asthma"; });
+  var score = band.idx + (sensitive ? 1 : 0) + (strenuous ? 1 : 0);
+  var who = sensitive
+    ? "children, elderly, and people with breathing issues"
+    : "healthy adults";
+  if (score <= 1){
+    return { verdict:"go",
+      title:"Go — air is fine today.",
+      text:"At AQI " + aqi + " (" + band.label + "), it's safe for " + who +
+            " to head out for " + activityName(activity) + ". No mask needed." };
+  }
+  if (score <= 3){
+    return { verdict:"caution",
+      title:"Caution — go, but take care.",
+      text:"At AQI " + aqi + " (" + band.label + "), keep " + activityName(activity) +
+            " short. Sensitive groups should wear a proper mask (N95/KN95) and skip anything strenuous." };
+  }
+  return { verdict:"stay",
+    title:"Stay indoors if you can.",
+    text:"At AQI " + aqi + " (" + band.label + "), the air is dangerous for " + who +
+          ". Postpone " + activityName(activity) + " — and if you must go out, wear an N95 and keep it brief." };
+}
+function activityName(a){
+  return { school:"the school run", walk:"a morning walk", work:"outdoor work", sports:"sports" }[a] || "this outing";
+}
+function maskForAqi(aqi){
+  var band = aqiBand(aqi);
+  if (band.idx <= 1) return "A simple surgical mask is enough — or none at all for a quick trip.";
+  if (band.idx === 2) return "Wear a KN95 (or a well-fitted N95) whenever you're outside.";
+  return "Wear a genuine N95 — nothing less seals well enough at this level.";
+}
+
+/* ============ Static content ============ */
+var MASKS = [
+  { name:"N95 respirator", eff:95, price:"PKR 350 – 800 per piece", buy:"Medical stores, pharmacies, Daraz",
+    note:"The only one that truly filters smog — if it seals on your face." },
+  { name:"KN95", eff:94, price:"PKR 250 – 600 per piece", buy:"Pharmacies, Metro, online",
+    note:"Nearly as good as N95. Fine for daily commute and school runs." },
+  { name:"Surgical mask", eff:30, price:"PKR 15 – 40 per piece", buy:"Everywhere",
+    note:"Stops droplets, not fine smog particles. Better than nothing on mild days." },
+  { name:"Cloth mask", eff:15, price:"PKR 100 – 300", buy:"Bazaars, online",
+    note:"Mostly fashion against smog. Don't rely on it past Moderate AQI." }
+];
+var PURIFIERS = [
+  { name:"Xiaomi Smart Air Purifier Elite", price:"PKR 58,000" },
+  { name:"Philips 800 Series",              price:"PKR 75,000" },
+  { name:"DIY box-fan + MERV-13 filter",    price:"~PKR 8,000" }
+];
+var TIPS = [
+  "Keep windows and doors shut during smog peaks (usually 6–11 AM).",
+  "Wet-mop floors instead of sweeping — sweeping kicks settled dust back into the air.",
+  "Seal gaps under doors and around window frames with tape on bad days.",
+  "Run the kitchen exhaust when cooking — indoor smoke adds to the problem.",
+  "Keep one 'clean room' (usually the bedroom) with the door closed and a purifier running."
+];
+var DAYS = ["Wed","Thu","Fri","Sat","Sun"];
+
+/* ============ UI wiring ============ */
+var citySelect = document.getElementById("citySelect");
+Object.keys(CITIES).forEach(function(k){
+  var o = document.createElement("option");
+  o.value = k; o.textContent = CITIES[k].name;
+  citySelect.appendChild(o);
+});
+citySelect.value = "lahore";
+
+var activeProfiles = ["adult"];
+var activeActivity = "school";
+var activeStrenuous = 0;
+
+function setPressed(containerId, attr, multi){
+  var btns = document.querySelectorAll("#" + containerId + " .chip");
+  btns.forEach(function(b){
+    b.addEventListener("click", function(){
+      if (multi){
+        var v = b.getAttribute(attr);
+        var on = b.getAttribute("aria-pressed") === "true";
+        if (v === "adult"){
+          activeProfiles = ["adult"];
+        } else {
+          activeProfiles = activeProfiles.filter(function(p){ return p !== "adult"; });
+          if (on) activeProfiles = activeProfiles.filter(function(p){ return p !== v; });
+          else activeProfiles.push(v);
+          if (activeProfiles.length === 0) activeProfiles = ["adult"];
+        }
+        refreshChips(containerId, attr, activeProfiles);
+      } else {
+        btns.forEach(function(x){ x.setAttribute("aria-pressed","false"); });
+        b.setAttribute("aria-pressed","true");
+        activeActivity = b.getAttribute(attr);
+        activeStrenuous = parseInt(b.getAttribute("data-strenuous"), 10);
+      }
+      updateVerdict();
+    });
+  });
+}
+function refreshChips(containerId, attr, active){
+  document.querySelectorAll("#" + containerId + " .chip").forEach(function(b){
+    b.setAttribute("aria-pressed", String(active.indexOf(b.getAttribute(attr)) !== -1));
+  });
+}
+
+function updateVerdict(){
+  var city = CITIES[citySelect.value];
+  var r = recommend(city.aqi, activeProfiles, activeActivity, activeStrenuous);
+  var v = document.getElementById("verdict");
+  v.className = "verdict show " + r.verdict;
+  document.getElementById("verdictTitle").textContent = r.title;
+  document.getElementById("verdictText").textContent = r.text;
+}
+
+function renderCity(){
+  var key = citySelect.value, c = CITIES[key];
+  var band = aqiBand(c.aqi);
+  document.getElementById("aqiNum").textContent = c.aqi;
+  document.getElementById("aqiNum").style.color = band.color;
+  document.getElementById("aqiCity").textContent = "AQI · " + c.name;
+  var b = document.getElementById("aqiBand");
+  b.style.background = band.color;
+  b.querySelector("span").textContent = band.label;
+  document.getElementById("pollutant").textContent = "PM2.5";
+  document.getElementById("pm25").textContent = c.pm25 + " µg/m³";
+  document.getElementById("hotspot").textContent = c.hotspot;
+  var now = new Date();
+  document.getElementById("updatedAt").textContent =
+    now.toLocaleTimeString("en-PK", {hour:"numeric", minute:"2-digit"}) + " PKT";
+
+  // gauge: half-circle, arc length ≈ π*52 ≈ 163.3; fill = aqi/400 clamped
+  var frac = Math.min(c.aqi, 400) / 400;
+  var arc = document.getElementById("gaugeArc");
+  arc.style.stroke = band.color;
+  arc.style.strokeDashoffset = String(163.3 * (1 - frac));
+
+  // alerts
+  var al = document.getElementById("alerts");
+  al.innerHTML = "";
+  c.alerts.forEach(function(a){
+    var d = document.createElement("div");
+    d.className = "alert sev-" + a.sev;
+    d.innerHTML = '<div class="alert-head"><span class="sev">' + a.tag +
+      '</span><time>' + a.time + '</time></div><p>' + a.text + '</p>';
+    al.appendChild(d);
+  });
+
+  // forecast
+  var f = document.getElementById("forecast");
+  f.innerHTML = "";
+  var max = 400;
+  c.forecast.forEach(function(v, i){
+    var bd = aqiBand(v);
+    var d = document.createElement("div");
+    d.className = "fday";
+    d.innerHTML = '<div class="fbar" style="height:' + Math.max(12, v/max*150) + 'px;background:' + bd.color +
+      '"></div><div class="fv">' + v + '</div><div class="fd">' + DAYS[i] + '</div>';
+    f.appendChild(d);
+  });
+
+  // mask picker
+  document.getElementById("pickerCity").textContent = c.name;
+  document.getElementById("pickerMask").textContent = maskForAqi(c.aqi);
+
+  updateVerdict();
+}
+
+function renderStatic(){
+  var mg = document.getElementById("masks");
+  MASKS.forEach(function(m){
+    var d = document.createElement("div");
+    d.className = "mask";
+    d.innerHTML = '<h3>' + m.name + '</h3><p style="font-size:.88rem;color:#6B7280">' + m.note + '</p>' +
+      '<div class="eff"><span style="width:' + m.eff + '%"></span></div>' +
+      '<div class="pct">' + m.eff + '% particle filtration</div>' +
+      '<div class="price">' + m.price + '</div>' +
+      '<div class="buy">Where to buy: ' + m.buy + '</div>';
+    mg.appendChild(d);
+  });
+  var pf = document.getElementById("purifiers");
+  PURIFIERS.forEach(function(p){
+    var d = document.createElement("div");
+    d.className = "purifier";
+    d.innerHTML = '<span>' + p.name + '</span><span class="p-price">' + p.price + '</span>';
+    pf.appendChild(d);
+  });
+  var tp = document.getElementById("tips");
+  TIPS.forEach(function(t){
+    var li = document.createElement("li");
+    li.textContent = t;
+    tp.appendChild(li);
+  });
+}
+
+citySelect.addEventListener("change", renderCity);
+setPressed("profiles", "data-p", true);
+setPressed("activities", "data-a", false);
+renderStatic();
+renderCity();
+</script>
+</body>
+</html>
